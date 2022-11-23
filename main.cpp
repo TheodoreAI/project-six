@@ -1,6 +1,15 @@
+//	This is a sample OpenGL / GLUT program
+//	Author:	Mateo Estrada Jorge
+//	Date:	November 2022
+//	Modified: November 2022
+// Description: The following program will draw the Catmull-Rom Curve 
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+// include vector library
+#include <vector>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -15,28 +24,13 @@
 #include <OpenGl/glu.h>
 #include "glut.h"
 
+// animation ms per cycle 
+#define MS_PER_CYCLE	10000
 
-//	This is a sample OpenGL / GLUT program
-//
-//	The objective is to draw a 3d object and change the color of the axes
-//		with a glut menu
-//
-//	The left mouse button does rotation
-//	The middle mouse button does scaling
-//	The user interface allows:
-//		1. The axes to be turned on and off
-//		2. The color of the axes to be changed
-//		3. Debugging to be turned on and off
-//		4. Depth cueing to be turned on and off
-//		5. The projection to be changed
-//		6. The transformations to be reset
-//		7. The program to quit
-//
-//	Author:			Joe Graphics
 
 // title of these windows:
 
-const char *WINDOWTITLE = "OpenGL / GLUT Sample -- Joe Graphics";
+const char *WINDOWTITLE = "OpenGL / GLUT Geometric Project -- Mateo Estrada Jorge";
 const char *GLUITITLE   = "User Interface Window";
 
 // what the glui package defines as true and false:
@@ -174,7 +168,9 @@ int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
 int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
-GLuint	BoxList;				// object display list
+
+GLuint  CurveList;				// another object display list
+GLuint  StemList;
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		ShadowsOn;				// != 0 means to turn shadows on
@@ -182,7 +178,12 @@ int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
+float 	Time;
 
+
+bool    controlPoints = false;
+bool    controlLines = false;
+bool   	Freeze = false;
 
 // function prototypes:
 
@@ -208,25 +209,87 @@ void	MouseMotion( int, int );
 void	Reset( );
 void	Resize( int, int );
 void	Visibility( int );
-
-void			Axes( float );
+void 	DrawCurve( struct curve * );
+void	Axes( float );
 
 unsigned char *	BmpToTexture( char *, int *, int * );
 int				ReadInt( FILE * );
 short			ReadShort( FILE * );
-
 void			HsvRgb( float[3], float [3] );
-
 void			Cross(float[3], float[3], float[3]);
 float			Dot(float [3], float [3]);
 float			Unit(float [3], float [3]);
 
 
-// main program:
 
-int
-main( int argc, char *argv[ ] )
+struct Point
 {
+    // float x0, y0, z0;       // initial coordinates
+    float x,  y,  z;        // animated coordinates
+	
+};
+
+struct Curve {
+    float r, g, b;
+    Point p0, p1, p2, p3;
+};
+
+
+// define constant NumPoints
+const int NUMPOINTS  = 30;
+
+//Draw the curve using the Catmull-Rom code from the assignment 6
+// To draw the curve we accept the curve struct as a parameter passed by reference
+void DrawCurve( struct Curve *curve ){    
+	glLineWidth( 3. );
+    glColor3f( curve->r, curve->g, curve->b );
+	// Define the six points using the curve points that are accessed using the arrow operator
+	// 
+    struct Point p0 = curve->p0;
+    struct Point p1 = curve->p1;
+    struct Point p2 = curve->p2;
+	struct Point p3 = curve->p3;
+  
+	// Begin drawing the curve using GL_LINE_STRIP
+    glBegin( GL_LINE_STRIP );
+        for( int it = 0; it <= NUMPOINTS; it++ )
+        {	
+			// using the The Cubic Catmull-Rom Equation to calculate the points
+			float t = (float)it / (float)NUMPOINTS;
+			float x = (2*p1.x) + (-p0.x + p2.x)*t + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*t*t + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*t*t*t;
+			float y = (2*p1.y) + (-p0.y + p2.y)*t + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*t*t + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*t*t*t;
+			float z = (2*p1.z) + (-p0.z + p2.z)*t + (2*p0.z - 5*p1.z + 4*p2.z - p3.z)*t*t + (-p0.z + 3*p1.z - 3*p2.z + p3.z)*t*t*t;
+
+            
+            glVertex3f( x, y, z );
+        }
+    glEnd( );
+	glLineWidth( 1. );
+    glColor3f( 0., 0., 1. );
+    // Draw control points
+    if(controlPoints){
+        glPointSize( 5. );
+        glBegin( GL_POINTS );
+            glVertex3f(p0.x, p0.y, p0.z);
+            glVertex3f(p1.x, p1.y, p1.z);
+            glVertex3f(p2.x, p2.y, p2.z);
+           
+        glEnd( );
+    }
+
+    // Draw control lines
+    if(controlLines){
+        glLineWidth( 1. );
+        glBegin( GL_LINE_STRIP );
+            glVertex3f(p0.x, p0.y, p0.z);
+            glVertex3f(p1.x, p1.y, p1.z);
+            glVertex3f(p2.x, p2.y, p2.z);
+           
+        glEnd( );
+    }
+}
+// The main program runs all of the initialization functions and then enters the main loop
+int main( int argc, char *argv[ ] ){
 	// turn on the glut package:
 	// (do this before checking argc and argv since it might
 	// pull some command line arguments out)
@@ -234,20 +297,16 @@ main( int argc, char *argv[ ] )
 	glutInit( &argc, argv );
 
 	// setup all the graphics stuff:
-
 	InitGraphics( );
 
 	// create the display structures that will not change:
-
 	InitLists( );
 
 	// init all the global variables used by Display( ):
 	// this will also post a redisplay
-
 	Reset( );
 
 	// setup all the user interface stuff:
-
 	InitMenus( );
 
 	// draw the scene once and wait for some interaction:
@@ -263,36 +322,27 @@ main( int argc, char *argv[ ] )
 }
 
 
-// this is where one would put code that is to be called
-// everytime the glut main loop has nothing to do
-//
-// this is typically where animation parameters are set
-//
-// do not call Display( ) from here -- let glutPostRedisplay( ) do it
-
-void
-Animate( )
-{
+void Animate( ){
 	// put animation stuff in here -- change some global variables
 	// for Display( ) to find:
-
+	// make the animation using the Time
+	// get the current time
+	int ms = glutGet( GLUT_ELAPSED_TIME );
+	ms %= MS_PER_CYCLE;
+	Time = (float)ms / (float)MS_PER_CYCLE;	
+	// animate the position of the point using the time variable (0 to 1)
+	// animate the position of the point using the time variable (0 to 1)
 	// force a call to Display( ) next time it is convenient:
 
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
 }
 
-
-// draw the complete scene:
-
-void
-Display( )
-{
+// Draw the complete scene:
+void Display( ){
 	// set which window we want to do the graphics into:
 
 	glutSetWindow( MainWindow );
-
-
 	// erase the background:
 
 	glDrawBuffer( GL_BACK );
@@ -306,12 +356,10 @@ Display( )
 
 
 	// specify shading to be flat:
-
 	glShadeModel( GL_FLAT );
 
 
 	// set the viewport to a square centered in the window:
-
 	GLsizei vx = glutGet( GLUT_WINDOW_WIDTH );
 	GLsizei vy = glutGet( GLUT_WINDOW_HEIGHT );
 	GLsizei v = vx < vy ? vx : vy;			// minimum dimension
@@ -324,7 +372,6 @@ Display( )
 	// remember that the Z clipping  values are actually
 	// given as DISTANCES IN FRONT OF THE EYE
 	// USE gluOrtho2D( ) IF YOU ARE DOING 2D !
-
 	glMatrixMode( GL_PROJECTION );
 	glLoadIdentity( );
 	if( WhichProjection == ORTHO )
@@ -334,31 +381,26 @@ Display( )
 
 
 	// place the objects into the scene:
-
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
 
 
 	// set the eye position, look-at position, and up-vector:
-
 	gluLookAt( 0.f, 0.f, 3.f,     0.f, 0.f, 0.f,     0.f, 1.f, 0.f );
 
 
 	// rotate the scene:
-
 	glRotatef( (GLfloat)Yrot, 0.f, 1.f, 0.f );
 	glRotatef( (GLfloat)Xrot, 1.f, 0.f, 0.f );
 
 
 	// uniformly scale the scene:
-
 	if( Scale < MINSCALE )
 		Scale = MINSCALE;
 	glScalef( (GLfloat)Scale, (GLfloat)Scale, (GLfloat)Scale );
 
 
 	// set the fog parameters:
-
 	if( DepthCueOn != 0 )
 	{
 		glFogi( GL_FOG_MODE, FOGMODE );
@@ -375,33 +417,66 @@ Display( )
 
 
 	// possibly draw the axes:
-
 	if( AxesOn != 0 )
 	{
 		glColor3fv( &Colors[WhichColor][0] );
 		glCallList( AxesList );
 	}
 
-
 	// since we are using glScalef( ), be sure the normals get unitized:
-
 	glEnable( GL_NORMALIZE );
+	// Draw a tree with the Point struct, the struct Curve, and the DrawCurve function
+	int numberOfCurves = 1;
+	glColor3b( 0., 1., 0. );
+	glPushMatrix();
+		for(int j = 0; j < 10; j++){
+			for(int i = 0; i < numberOfCurves; i++){
+				struct Point p0 = {-j*sin(Time*M_PI), 0., 0.};
+				struct Point p1 = {0., -j*sin(Time*M_PI), 0.};
+				struct Point p2 = {0., 0., -j*sin(Time*M_PI)};
+				struct Point p3 = {0., 0., -j*sin(Time*M_PI)};
+				struct Curve curve;
+				curve.p0 = p0;
+				curve.p1 = p1;
+				curve.p2 = p2;
+				curve.p3 = p3;
+				curve.r = 0.;
+				curve.g = 0.;
+				curve.b = 1.;
+				DrawCurve(&curve);
+			}
+		}
+		for(int j = 0; j < 10; j++){
+			for(int i = 0; i < numberOfCurves; i++){
+				struct Point p0 = {j*sin(Time*M_PI), 0., 0.};
+				struct Point p1 = {0., j*sin(Time*M_PI), 0.};
+				struct Point p2 = {0., 0., j*sin(Time*M_PI)};
+				struct Point p3 = {0., 0., j*sin(Time*M_PI)};
+				struct Curve curve;
+				curve.p0 = p0;
+				curve.p1 = p1;
+				curve.p2 = p2;
+				curve.p3 = p3;
+				curve.r = 1.;
+				curve.g = 0.;
+				curve.b = 0.;
+				DrawCurve(&curve);
+			}
+		}
+	glPopMatrix();
 
-
-	// draw the box object by calling up its display list:
-
-	glCallList( BoxList );
+	
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
 	{
 		glPushMatrix( );
 			glRotatef( 90.f,   0.f, 1.f, 0.f );
-			glCallList( BoxList );
+			glCallList( CurveList );
+			glCallList( StemList );
 		glPopMatrix( );
 	}
 #endif
-
 
 	// draw some gratuitous text that just rotates on top of the scene:
 	// i commented out the actual text-drawing calls -- put them back in if you have a use for them
@@ -410,18 +485,8 @@ Display( )
 
 	glDisable( GL_DEPTH_TEST );
 	glColor3f( 0.f, 1.f, 1.f );
-	//DoRasterString( 0.f, 1.f, 0.f, (char *)"Text That Moves" );
-
-
-	// draw some gratuitous text that is fixed on the screen:
-	//
-	// the projection matrix is reset to define a scene whose
-	// world coordinate system goes from 0-100 in each axis
-	//
-	// this is called "percent units", and is just a convenience
-	//
-	// the modelview matrix is reset to identity as we don't
-	// want to transform these coordinates
+	// DoRasterString( 0.f, 1.f, 0.f, (char *)"Text That Moves" );
+	// Draw some gratuitous text that is fixed on the screen:
 
 	glDisable( GL_DEPTH_TEST );
 	glMatrixMode( GL_PROJECTION );
@@ -430,15 +495,13 @@ Display( )
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
 	glColor3f( 1.f, 1.f, 1.f );
+
 	//DoRasterString( 5.f, 5.f, 0.f, (char *)"Text That Doesn't" );
-
 	// swap the double-buffered framebuffers:
-
 	glutSwapBuffers( );
 
 	// be sure the graphics buffer has been sent:
 	// note: be sure to use glFlush( ) here, not glFinish( ) !
-
 	glFlush( );
 }
 
@@ -752,67 +815,8 @@ InitGraphics( )
 void
 InitLists( )
 {
-	float dx = BOXSIZE / 2.f;
-	float dy = BOXSIZE / 2.f;
-	float dz = BOXSIZE / 2.f;
 	glutSetWindow( MainWindow );
-
-	// create the object:
-
-	BoxList = glGenLists( 1 );
-	glNewList( BoxList, GL_COMPILE );
-
-		glBegin( GL_QUADS );
-
-			glColor3f( 1., 0., 0. );
-
-				glNormal3f( 1., 0., 0. );
-					glVertex3f(  dx, -dy,  dz );
-					glVertex3f(  dx, -dy, -dz );
-					glVertex3f(  dx,  dy, -dz );
-					glVertex3f(  dx,  dy,  dz );
-
-				glNormal3f(-1., 0., 0.);
-					glVertex3f( -dx, -dy,  dz);
-					glVertex3f( -dx,  dy,  dz );
-					glVertex3f( -dx,  dy, -dz );
-					glVertex3f( -dx, -dy, -dz );
-
-			glColor3f( 0., 1., 0. );
-
-				glNormal3f(0., 1., 0.);
-					glVertex3f( -dx,  dy,  dz );
-					glVertex3f(  dx,  dy,  dz );
-					glVertex3f(  dx,  dy, -dz );
-					glVertex3f( -dx,  dy, -dz );
-
-				glNormal3f(0., -1., 0.);
-					glVertex3f( -dx, -dy,  dz);
-					glVertex3f( -dx, -dy, -dz );
-					glVertex3f(  dx, -dy, -dz );
-					glVertex3f(  dx, -dy,  dz );
-
-			glColor3f(0., 0., 1.);
-
-				glNormal3f(0., 0., 1.);
-					glVertex3f(-dx, -dy, dz);
-					glVertex3f( dx, -dy, dz);
-					glVertex3f( dx,  dy, dz);
-					glVertex3f(-dx,  dy, dz);
-
-				glNormal3f(0., 0., -1.);
-					glVertex3f(-dx, -dy, -dz);
-					glVertex3f(-dx,  dy, -dz);
-					glVertex3f( dx,  dy, -dz);
-					glVertex3f( dx, -dy, -dz);
-
-		glEnd( );
-
-	glEndList( );
-
-
 	// create the axes:
-
 	AxesList = glGenLists( 1 );
 	glNewList( AxesList, GL_COMPILE );
 		glLineWidth( AXES_WIDTH );
@@ -823,7 +827,6 @@ InitLists( )
 
 
 // the keyboard callback:
-
 void
 Keyboard( unsigned char c, int x, int y )
 {
@@ -832,6 +835,20 @@ Keyboard( unsigned char c, int x, int y )
 
 	switch( c )
 	{
+		case 'f':
+		case 'F':
+			Freeze = !Freeze;
+			if( Freeze )
+				glutIdleFunc( NULL );
+			else
+				glutIdleFunc( Animate );
+			break;
+		case '1':
+			controlPoints = !controlPoints;
+			break;
+		case '2':
+			controlLines = !controlLines;
+			break;
 		case 'o':
 		case 'O':
 			WhichProjection = ORTHO;
@@ -971,6 +988,8 @@ Reset( )
 	WhichColor = WHITE;
 	WhichProjection = PERSP;
 	Xrot = Yrot = 0.;
+	controlPoints = false;
+	controlLines = false;
 }
 
 
