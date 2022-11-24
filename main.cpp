@@ -32,7 +32,7 @@
 
 const char *WINDOWTITLE = "OpenGL / GLUT Geometric Project -- Mateo Estrada Jorge";
 const char *GLUITITLE   = "User Interface Window";
-
+const float PI = 3.1415926535897932384626433832795;
 // what the glui package defines as true and false:
 
 const int GLUITRUE  = true;
@@ -209,7 +209,8 @@ void	MouseMotion( int, int );
 void	Reset( );
 void	Resize( int, int );
 void	Visibility( int );
-void 	DrawCurve( struct curve * );
+void 	DrawCatmullCurve( struct curve * );
+
 void	Axes( float );
 
 unsigned char *	BmpToTexture( char *, int *, int * );
@@ -231,16 +232,30 @@ struct Point
 
 struct Curve {
     float r, g, b;
-    Point p0, p1, p2, p3;
+    Point p0, p1, p2, p3, p4, p5;
 };
 
+void RotateZ( Point *p, float deg, float xc, float yc, float zc ){
+        float rad = deg * (M_PI/180.f);         // radians
+        float x = p->x - xc;
+        float y = p->y - yc;
+        float z = p->z - zc;
+
+        float xp = x*cos(rad) - y*sin(rad);
+        float yp = x*sin(rad) + y*cos(rad);
+        float zp = z;
+
+        p->x = xp + xc;
+        p->y = yp + yc;
+        p->z = zp + zc;
+}
 
 // define constant NumPoints
-const int NUMPOINTS  = 30;
+const int NUMPOINTS  = 6;
 
 //Draw the curve using the Catmull-Rom code from the assignment 6
 // To draw the curve we accept the curve struct as a parameter passed by reference
-void DrawCurve( struct Curve *curve ){    
+void DrawCatmullCurve( struct Curve *curve ){    
 	glLineWidth( 3. );
     glColor3f( curve->r, curve->g, curve->b );
 	// Define the six points using the curve points that are accessed using the arrow operator
@@ -249,18 +264,20 @@ void DrawCurve( struct Curve *curve ){
     struct Point p1 = curve->p1;
     struct Point p2 = curve->p2;
 	struct Point p3 = curve->p3;
+	struct Point p4 = curve->p4;
+	struct Point p5 = curve->p5;
+	float angle = 0;
   
 	// Begin drawing the curve using GL_LINE_STRIP
     glBegin( GL_LINE_STRIP );
         for( int it = 0; it <= NUMPOINTS; it++ )
         {	
 			// using the The Cubic Catmull-Rom Equation to calculate the points
-			float t = (float)it / (float)NUMPOINTS;
-			float x = (2*p1.x) + (-p0.x + p2.x)*t + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*t*t + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*t*t*t;
-			float y = (2*p1.y) + (-p0.y + p2.y)*t + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*t*t + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*t*t*t;
-			float z = (2*p1.z) + (-p0.z + p2.z)*t + (2*p0.z - 5*p1.z + 4*p2.z - p3.z)*t*t + (-p0.z + 3*p1.z - 3*p2.z + p3.z)*t*t*t;
-
-            
+			float t = (float)it / (float)(NUMPOINTS-1);
+			angle += it;
+			float x = 0.5*((2*p1.x) + (-p0.x + p2.x)*t + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*t*t + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*t*t*t) ;
+			float y = 0.5*((2*p1.y) + (-p0.y + p2.y)*t + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*t*t + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*t*t*t);
+			float z = 0.5*((2*p1.z) + (-p0.z + p2.z)*t + (2*p0.z - 5*p1.z + 4*p2.z - p3.z)*t*t + (-p0.z + 3*p1.z - 3*p2.z + p3.z)*t*t*t);
             glVertex3f( x, y, z );
         }
     glEnd( );
@@ -270,10 +287,11 @@ void DrawCurve( struct Curve *curve ){
     if(controlPoints){
         glPointSize( 5. );
         glBegin( GL_POINTS );
-            glVertex3f(p0.x, p0.y, p0.z);
-            glVertex3f(p1.x, p1.y, p1.z);
-            glVertex3f(p2.x, p2.y, p2.z);
-           
+			glVertex3f( p1.x, p1.y, p1.z );
+			glVertex3f( p2.x, p2.y, p2.z );
+			glVertex3f( p3.x, p3.y, p3.z );
+			glVertex3f( p4.x, p4.y, p4.z );
+			glVertex3f( p5.x, p5.y, p5.z );
         glEnd( );
     }
 
@@ -284,6 +302,9 @@ void DrawCurve( struct Curve *curve ){
             glVertex3f(p0.x, p0.y, p0.z);
             glVertex3f(p1.x, p1.y, p1.z);
             glVertex3f(p2.x, p2.y, p2.z);
+			glVertex3f(p3.x, p3.y, p3.z);
+			glVertex3f(p4.x, p4.y, p4.z);
+			glVertex3f(p5.x, p5.y, p5.z);
            
         glEnd( );
     }
@@ -425,47 +446,85 @@ void Display( ){
 
 	// since we are using glScalef( ), be sure the normals get unitized:
 	glEnable( GL_NORMALIZE );
-	// Draw a tree with the Point struct, the struct Curve, and the DrawCurve function
-	int numberOfCurves = 1;
-	glColor3b( 0., 1., 0. );
-	glPushMatrix();
-		for(int j = 0; j < 10; j++){
-			for(int i = 0; i < numberOfCurves; i++){
-				struct Point p0 = {-j*sin(Time*M_PI), 0., 0.};
-				struct Point p1 = {0., -j*sin(Time*M_PI), 0.};
-				struct Point p2 = {0., 0., -j*sin(Time*M_PI)};
-				struct Point p3 = {0., 0., -j*sin(Time*M_PI)};
-				struct Curve curve;
-				curve.p0 = p0;
-				curve.p1 = p1;
-				curve.p2 = p2;
-				curve.p3 = p3;
-				curve.r = 0.;
-				curve.g = 0.;
-				curve.b = 1.;
-				DrawCurve(&curve);
-			}
-		}
-		for(int j = 0; j < 10; j++){
-			for(int i = 0; i < numberOfCurves; i++){
-				struct Point p0 = {j*sin(Time*M_PI), 0., 0.};
-				struct Point p1 = {0., j*sin(Time*M_PI), 0.};
-				struct Point p2 = {0., 0., j*sin(Time*M_PI)};
-				struct Point p3 = {0., 0., j*sin(Time*M_PI)};
-				struct Curve curve;
-				curve.p0 = p0;
-				curve.p1 = p1;
-				curve.p2 = p2;
-				curve.p3 = p3;
-				curve.r = 1.;
-				curve.g = 0.;
-				curve.b = 0.;
-				DrawCurve(&curve);
-			}
-		}
-	glPopMatrix();
+	// Draw a tree with the Point struct, the struct Curve, and the DrawCatmullCurve function
+	int numberOfCurves = 10;
 
-	
+
+	for (int row = 0; row < 4; row++) {
+		glPushMatrix();
+		glTranslatef(20*row, 0., -30*row);
+		// Draw a circle with the Point struct, the struct Curve, and the DrawCatmullCurve function
+				struct Point p0 = {1, 0, 0};
+				struct Point p1 = {0, 10, 0};
+				struct Point p2 = {0, 0, 0};
+				struct Point p3 = {1, 0, 0};
+				struct Point p4 = {0, 5, 0};
+				struct Point p5 = {0, 0, 10};
+				struct Curve curve;
+				curve.p0 = p0;
+				curve.p1 = p1;
+				curve.p2 = p2;
+				curve.p3 = p3;
+				curve.p4 = p4;
+				curve.p5 = p5;
+				curve.r = 1;
+				curve.g = 1;
+				curve.b = 0;
+
+				DrawCatmullCurve(&curve);
+				
+		
+		
+		
+		for(int i = 0; i < numberOfCurves; i++){
+				float colorScale = 1 - (float)i / (float)numberOfCurves;
+				struct Point p0 = {1*i*sin(PI*Time), 0, 1*i*sin(PI*Time)};
+				struct Point p1 = {0, 10*sin(PI*Time), 0};
+				struct Point p2 = {1*i*sin(PI*Time), 0, 0};
+				struct Point p3 = {0, 0, 1*i*sin(PI*Time)};
+				struct Point p4 = {0, 0, 0};
+				struct Point p5 = {0, 10*sin(PI*Time), 0};
+				struct Curve curve;
+				curve.p0 = p0;
+				curve.p1 = p1;
+				curve.p2 = p2;
+				curve.p3 = p3;
+				curve.p4 = p4;
+				curve.p5 = p5;
+				curve.r = 0;
+				curve.g = colorScale;
+				curve.b = 0;
+
+				DrawCatmullCurve(&curve);
+				
+			}
+			
+		for(int i = 0; i < numberOfCurves; i++){
+				float colorScale = 1 - (float)i / (float)numberOfCurves;
+				struct Point p0 = {-1*i*sin(PI*Time), 0, 1*i*sin(PI*Time)};
+				struct Point p1 = {0, 10*sin(PI*Time), 0};
+				struct Point p2 = {-1*i*sin(PI*Time), 0, 0};
+				struct Point p3 = {0, 0, 1*i*sin(PI*Time)};
+				struct Point p4 = {0, 0, 0};
+				struct Point p5 = {0, 10*sin(PI*Time), 0};
+				struct Curve curve;
+				curve.p0 = p0;
+				curve.p1 = p1;
+				curve.p2 = p2;
+				curve.p3 = p3;
+				curve.p4 = p4;
+				curve.p5 = p5;
+				curve.r = 0;
+				curve.g = colorScale;
+				curve.b = 0;
+
+				DrawCatmullCurve(&curve);
+				
+			}
+		
+		glPopMatrix();
+	}
+
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
